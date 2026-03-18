@@ -23,26 +23,31 @@ def webhook():
     return "OK", 200
 
 def enviar_email(nome, email):
-    message = Mail(
-        from_email='lucasfeijorodrigues@gmail.com',
-        to_emails=email,
-        subject='Seu link de pagamento',
-        html_content=f"""
-        <p>Olá {nome},</p>
-        <p>Clique abaixo para pagar:</p>
-        <a href="https://invoice.infinitepay.io/feijonut/7NgEpgMrIJ">
-        PAGAR AGORA
-        </a>
-        """
-    )
-
     try:
-        sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
-        response = sg.send(message)
-        print("Email enviado!", response.status_code)
-    except Exception as e:
-        print("Erro ao enviar email:", e)
+        print("Iniciando envio de email...")
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+        message = Mail(
+            from_email='lucasfeijorodrigues@gmail.com',
+            to_emails=email,
+            subject='Seu link de pagamento',
+            html_content=f"""
+            <p>Olá {nome},</p>
+            <p>Clique abaixo para pagar:</p>
+            <a href="https://invoice.infinitepay.io/feijonut/7NgEpgMrIJ">
+            PAGAR AGORA
+            </a>
+            """
+        )
+
+        sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
+
+        print("API KEY:", os.environ.get('SENDGRID_API_KEY'))
+
+        response = sg.send(message)
+
+        print("Status:", response.status_code)
+        print("Body:", response.body)
+        print("Headers:", response.headers)
+
+    except Exception as e:
+        print("ERRO AO ENVIAR EMAIL:", str(e))
