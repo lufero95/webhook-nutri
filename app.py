@@ -13,10 +13,10 @@ def home():
 def webhook():
     data = request.get_json()
 
+    print("Dados recebidos:", data)
+
     nome = data.get("nome")
     email = data.get("email")
-
-    print("Dados recebidos:", data)
 
     enviar_email(nome, email)
 
@@ -39,15 +39,18 @@ def enviar_email(nome, email):
             """
         )
 
-        sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
+        api_key = os.environ.get('SENDGRID_API_KEY')
+        print("API KEY:", api_key)
 
-        print("API KEY:", os.environ.get('SENDGRID_API_KEY'))
+        sg = SendGridAPIClient(api_key)
 
         response = sg.send(message)
 
         print("Status:", response.status_code)
-        print("Body:", response.body)
-        print("Headers:", response.headers)
 
     except Exception as e:
         print("ERRO AO ENVIAR EMAIL:", str(e))
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
