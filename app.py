@@ -2,17 +2,53 @@ from flask import Flask, request
 import os
 import requests
 import uuid
+import json
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
 app = Flask(__name__)
 
-# Armazenamento simples (em memória)
-pedidos = {}
+ARQUIVO_PEDIDOS = "pedidos.json"
 
 @app.route("/")
 def home():
     return "Servidor funcionando!"
+
+# ===============================
+# SALVAR PEDIDO
+# ===============================
+def salvar_pedido(order_nsu, dados):
+    try:
+        try:
+            with open(ARQUIVO_PEDIDOS, "r") as f:
+                pedidos = json.load(f)
+        except:
+            pedidos = {}
+
+        pedidos[order_nsu] = dados
+
+        with open(ARQUIVO_PEDIDOS, "w") as f:
+            json.dump(pedidos, f)
+
+        print("Pedido salvo no arquivo!")
+
+    except Exception as e:
+        print("Erro ao salvar pedido:", e)
+
+
+# ===============================
+# BUSCAR PEDIDO
+# ===============================
+def buscar_pedido(order_nsu):
+    try:
+        with open(ARQUIVO_PEDIDOS, "r") as f:
+            pedidos = json.load(f)
+
+        return pedidos.get(order_nsu)
+
+    except:
+        return None
+
 
 # ===============================
 # RECEBE DADOS DO FORMULÁRIO
@@ -29,13 +65,11 @@ def webhook():
     # Criar pagamento na InfinitePay
     link, order_nsu = criar_pagamento(nome, email)
 
-    # Salvar pedido
-    pedidos[order_nsu] = {
+    # Salvar pedido em arquivo
+    salvar_pedido(order_nsu, {
         "nome": nome,
         "email": email
-    }
-
-    print("Pedido salvo:", pedidos)
+    })
 
     # Enviar email com link de pagamento
     enviar_email_pagamento(nome, email, link)
@@ -53,7 +87,7 @@ def criar_pagamento(nome, email):
     url = "https://api.infinitepay.io/invoices/public/checkout/links"
 
     payload = {
-        "handle": "feijonut",  # 🔥 SEU HANDLE AQUI
+        "handle": "feijonut",
         "webhook_url": "https://webhook-nutri-y5bp.onrender.com/pagamento",
         "order_nsu": order_nsu,
         "customer": {
@@ -63,7 +97,7 @@ def criar_pagamento(nome, email):
         "items": [
             {
                 "quantity": 1,
-                "price": 100,  # R$1,00
+                "price": 100,
                 "description": "Produto 7D Desincha"
             }
         ]
@@ -96,10 +130,12 @@ def pagamento():
 
     order_nsu = data.get("order_nsu")
 
-    if order_nsu in pedidos:
+    pedido = buscar_pedido(order_nsu)
 
-        nome = pedidos[order_nsu]["nome"]
-        email = pedidos[order_nsu]["email"]
+    if pedido:
+
+        nome = pedido["nome"]
+        email = pedido["email"]
 
         print("Pagamento confirmado para:", email)
 
@@ -123,7 +159,7 @@ def enviar_email_pagamento(nome, email, link):
             subject='Seu link de pagamento',
             html_content=f"""
             <p>Olá {nome},</p>
-            <p>Chama, pai🔥- Clique abaixo para pagar:</p>
+            <p>Chama, pai🔥 - Clique abaixo para pagar:</p>
             <a href="{link}">PAGAR AGORA</a>
             """
         )
@@ -150,7 +186,9 @@ def enviar_email_pdf(nome, email):
             html_content=f"""
             <p>Olá {nome},</p>
             <p>Pagamento confirmado! Aqui está seu material:</p>
-            <a href="https://lncimg.lance.com.br/cdn-cgi/image/width=950,quality=75,fit=pad,format=webp/uploads/2024/11/AGIF24082921530730-scaled-aspect-ratio-512-320.jpg">BAIXAR PDF</a>
+            <a href="https://lncimg.lance.com.br/cdn-cgi/image/width=950,quality=75,fit=pad,format=webp/uploads/2024/11/AGIF24082921530730-scaled-aspect-ratio-512-320.jpg">
+            BAIXAR PDF
+            </a>
             """
         )
 
