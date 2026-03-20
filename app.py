@@ -1,14 +1,22 @@
 from flask import Flask, request
 import os
+import requests
+import uuid
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
 app = Flask(__name__)
 
+# Armazenamento simples (em memória)
+pedidos = {}
+
 @app.route("/")
 def home():
     return "Servidor funcionando!"
 
+# ===============================
+# RECEBE DADOS DO FORMULÁRIO
+# ===============================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json()
@@ -18,39 +26,146 @@ def webhook():
     nome = data.get("nome")
     email = data.get("email")
 
-    enviar_email(nome, email)
+    # Criar pagamento na InfinitePay
+    link, order_nsu = criar_pagamento(nome, email)
+
+    # Salvar pedido
+    pedidos[order_nsu] = {
+        "nome": nome,
+        "email": email
+    }
+
+    print("Pedido salvo:", pedidos)
+
+    # Enviar email com link de pagamento
+    enviar_email_pagamento(nome, email, link)
 
     return "OK", 200
 
-def enviar_email(nome, email):
-    try:
-        print("Iniciando envio de email...")
 
+# ===============================
+# CRIA PAGAMENTO NA INFINITEPAY
+# ===============================
+def criar_pagamento(nome, email):
+
+    order_nsu = str(uuid.uuid4())
+
+    url = "https://api.infinitepay.io/invoices/public/checkout/links"
+
+    payload = {
+        "handle": "feijonut",  # 🔥 SEU HANDLE AQUI
+        "webhook_url": "https://webhook-nutri-y5bp.onrender.com/pagamento",
+        "order_nsu": order_nsu,
+        "customer": {
+            "name": nome,
+            "email": email
+        },
+        "items": [
+            {
+                "quantity": 1,
+                "price": 100,  # R$1,00
+                "description": "Produto 7D Desincha"
+            }
+        ]
+    }
+
+    response = requests.post(url, json=payload)
+
+    try:
+        data = response.json()
+    except:
+        print("Erro ao converter resposta:", response.text)
+        return None, None
+
+    print("Resposta InfinitePay:", data)
+
+    link = data.get("url")
+
+    return link, order_nsu
+
+
+# ===============================
+# WEBHOOK DE PAGAMENTO CONFIRMADO
+# ===============================
+@app.route("/pagamento", methods=["POST"])
+def pagamento():
+
+    data = request.get_json()
+
+    print("Webhook pagamento recebido:", data)
+
+    order_nsu = data.get("order_nsu")
+
+    if order_nsu in pedidos:
+
+        nome = pedidos[order_nsu]["nome"]
+        email = pedidos[order_nsu]["email"]
+
+        print("Pagamento confirmado para:", email)
+
+        enviar_email_pdf(nome, email)
+
+    else:
+        print("Pedido não encontrado!")
+
+    return {"success": True}, 200
+
+
+# ===============================
+# EMAIL COM LINK DE PAGAMENTO
+# ===============================
+def enviar_email_pagamento(nome, email, link):
+
+    try:
         message = Mail(
             from_email='lucasfeijorodrigues@gmail.com',
             to_emails=email,
             subject='Seu link de pagamento',
             html_content=f"""
             <p>Olá {nome},</p>
-            <p>Clique abaixo para pagar:</p>
-            <a href="https://invoice.infinitepay.io/feijonut/7NgEpgMrIJ">
-            PAGAR AGORA
-            </a>
+            <p>Chama, pai🔥- Clique abaixo para pagar:</p>
+            <a href="{link}">PAGAR AGORA</a>
             """
         )
 
-        api_key = os.environ.get('SENDGRID_API_KEY')
-        print("API KEY:", api_key)
-
-        sg = SendGridAPIClient(api_key)
-
+        sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
         response = sg.send(message)
 
-        print("Status:", response.status_code)
+        print("Email pagamento enviado:", response.status_code)
 
     except Exception as e:
-        print("ERRO AO ENVIAR EMAIL:", str(e))
+        print("Erro ao enviar email pagamento:", str(e))
 
+
+# ===============================
+# EMAIL COM PDF (APÓS PAGAMENTO)
+# ===============================
+def enviar_email_pdf(nome, email):
+
+    try:
+        message = Mail(
+            from_email='lucasfeijorodrigues@gmail.com',
+            to_emails=email,
+            subject='Seu material',
+            html_content=f"""
+            <p>Olá {nome},</p>
+            <p>Pagamento confirmado! Aqui está seu material:</p>
+            <a href="https://lncimg.lance.com.br/cdn-cgi/image/width=950,quality=75,fit=pad,format=webp/uploads/2024/11/AGIF24082921530730-scaled-aspect-ratio-512-320.jpg">BAIXAR PDF</a>
+            """
+        )
+
+        sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
+        response = sg.send(message)
+
+        print("Email PDF enviado:", response.status_code)
+
+    except Exception as e:
+        print("Erro ao enviar PDF:", str(e))
+
+
+# ===============================
+# INICIAR SERVIDOR
+# ===============================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
