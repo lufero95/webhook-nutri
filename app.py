@@ -33,10 +33,10 @@ def salvar_pedido(order_nsu, dados):
         with open(ARQUIVO_PEDIDOS, "w") as f:
             json.dump(pedidos, f)
 
-        print("Pedido salvo no arquivo!")
+        print("✅ Pedido salvo no arquivo!")
 
     except Exception as e:
-        print("Erro ao salvar pedido:", e)
+        print("❌ Erro ao salvar pedido:", e)
 
 # ===============================
 # BUSCAR PEDIDO
@@ -48,69 +48,92 @@ def buscar_pedido(order_nsu):
 
         return pedidos.get(order_nsu)
 
-    except:
+    except Exception as e:
+        print("❌ Erro ao buscar pedido:", e)
         return None
 
 # ===============================
-# RECEBE FORMULÁRIO
+# WEBHOOK FORMULÁRIO
 # ===============================
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    data = request.get_json()
+    try:
+        data = request.get_json()
 
-    print("Dados recebidos:", data)
+        print("\n=== 🚀 WEBHOOK RECEBIDO ===")
+        print("Dados:", data)
 
-    nome = data.get("nome")
-    email = data.get("email")
+        nome = data.get("nome")
+        email = data.get("email")
 
-    link, order_nsu = criar_pagamento(nome, email)
+        print("Nome:", nome)
+        print("Email:", email)
 
-    salvar_pedido(order_nsu, {
-        "nome": nome,
-        "email": email
-    })
+        link, order_nsu = criar_pagamento(nome, email)
 
-    enviar_email_pagamento(nome, email, link)
+        print("Link gerado:", link)
+        print("Order NSU:", order_nsu)
 
-    return "OK", 200
+        salvar_pedido(order_nsu, {
+            "nome": nome,
+            "email": email
+        })
+
+        print("📧 Chamando envio de email...")
+
+        enviar_email_pagamento(nome, email, link)
+
+        print("✅ Fim do webhook\n")
+
+        return "OK", 200
+
+    except Exception as e:
+        print("❌ ERRO NO WEBHOOK:", e)
+        return "Erro", 500
 
 # ===============================
 # CRIA PAGAMENTO
 # ===============================
 def criar_pagamento(nome, email):
 
-    order_nsu = str(uuid.uuid4())
-
-    url = "https://api.infinitepay.io/invoices/public/checkout/links"
-
-    payload = {
-        "handle": "feijonut",
-        "webhook_url": "https://webhook-nutri-y5bp.onrender.com/pagamento",
-        "order_nsu": order_nsu,
-        "customer": {
-            "name": nome,
-            "email": email
-        },
-        "items": [
-            {
-                "quantity": 1,
-                "price": 100,
-                "description": "Produto 7D Desincha"
-            }
-        ]
-    }
-
-    response = requests.post(url, json=payload)
-
     try:
+        order_nsu = str(uuid.uuid4())
+
+        url = "https://api.infinitepay.io/invoices/public/checkout/links"
+
+        payload = {
+            "handle": "feijonut",
+            "webhook_url": "https://webhook-nutri-y5bp.onrender.com/pagamento",
+            "order_nsu": order_nsu,
+            "customer": {
+                "name": nome,
+                "email": email
+            },
+            "items": [
+                {
+                    "quantity": 1,
+                    "price": 100,
+                    "description": "Produto 7D Desincha"
+                }
+            ]
+        }
+
+        print("🔗 Criando pagamento na InfinitePay...")
+
+        response = requests.post(url, json=payload)
+
+        print("Status API:", response.status_code)
+        print("Resposta API:", response.text)
+
         data = response.json()
-    except:
-        print("Erro InfinitePay:", response.text)
+
+        link = data.get("url")
+
+        return link, order_nsu
+
+    except Exception as e:
+        print("❌ Erro ao criar pagamento:", e)
         return None, None
-
-    print("Resposta InfinitePay:", data)
-
-    return data.get("url"), order_nsu
 
 # ===============================
 # WEBHOOK PAGAMENTO
@@ -118,27 +141,34 @@ def criar_pagamento(nome, email):
 @app.route("/pagamento", methods=["POST"])
 def pagamento():
 
-    data = request.get_json()
+    try:
+        data = request.get_json()
 
-    print("Pagamento recebido:", data)
+        print("\n💰 Pagamento recebido:", data)
 
-    order_nsu = data.get("order_nsu")
+        order_nsu = data.get("order_nsu")
 
-    pedido = buscar_pedido(order_nsu)
+        pedido = buscar_pedido(order_nsu)
 
-    if pedido:
-        enviar_email_pdf(pedido["nome"], pedido["email"])
-    else:
-        print("Pedido não encontrado!")
+        if pedido:
+            print("✅ Pedido encontrado:", pedido)
 
-    return {"success": True}, 200
+            enviar_email_pdf(pedido["nome"], pedido["email"])
+        else:
+            print("❌ Pedido não encontrado!")
+
+        return {"success": True}, 200
+
+    except Exception as e:
+        print("❌ ERRO NO PAGAMENTO:", e)
+        return {"success": False}, 500
 
 # ===============================
-# ENVIO EMAIL (PAGAMENTO)
+# EMAIL PAGAMENTO
 # ===============================
 def enviar_email_pagamento(nome, email, link):
 
-    print("=== INICIANDO ENVIO EMAIL PAGAMENTO ===")
+    print("\n=== 📧 INICIANDO ENVIO EMAIL PAGAMENTO ===")
 
     try:
         msg = MIMEText(f"""
@@ -146,36 +176,42 @@ Olá {nome},
 
 Para continuar:
 {link}
+
+Se precisar, pode me responder aqui.
+
+Lucas
 """)
 
-        msg["Subject"] = "Teste envio"
+        msg["Subject"] = "Sua solicitação"
         msg["From"] = EMAIL_REMETENTE
         msg["To"] = email
 
-        print("Conectando ao Gmail...")
+        print("🔌 Conectando ao Gmail...")
 
         servidor = smtplib.SMTP("smtp.gmail.com", 587)
-        servidor.set_debuglevel(1)  # 🔥 MOSTRA TUDO
+        servidor.set_debuglevel(1)
+
         servidor.starttls()
 
-        print("Fazendo login...")
+        print("🔐 Fazendo login...")
         servidor.login(EMAIL_REMETENTE, SENHA_EMAIL)
 
-        print("Enviando email...")
+        print("📤 Enviando email...")
         servidor.send_message(msg)
 
-        print("Fechando conexão...")
         servidor.quit()
 
-        print("✅ EMAIL ENVIADO COM SUCESSO")
+        print("✅ EMAIL ENVIADO COM SUCESSO\n")
 
     except Exception as e:
-        print("❌ ERRO REAL:", str(e))
+        print("❌ ERRO AO ENVIAR EMAIL:", e)
 
 # ===============================
-# ENVIO EMAIL (PDF)
+# EMAIL PDF
 # ===============================
 def enviar_email_pdf(nome, email):
+
+    print("\n=== 📧 INICIANDO ENVIO PDF ===")
 
     try:
         msg = MIMEText(f"""
@@ -185,10 +221,6 @@ Pagamento confirmado.
 
 Segue o material:
 https://lncimg.lance.com.br/cdn-cgi/image/width=950,quality=75,fit=pad,format=webp/uploads/2024/11/AGIF24082921530730-scaled-aspect-ratio-512-320.jpg
-
-Qualquer dúvida, pode responder aqui.
-
-Lucas
 """)
 
         msg["Subject"] = "Seu material"
@@ -202,10 +234,10 @@ Lucas
         servidor.send_message(msg)
         servidor.quit()
 
-        print("Email PDF enviado")
+        print("✅ EMAIL PDF ENVIADO\n")
 
     except Exception as e:
-        print("Erro email PDF:", e)
+        print("❌ ERRO AO ENVIAR PDF:", e)
 
 # ===============================
 # START
