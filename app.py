@@ -4,7 +4,7 @@ import requests
 import uuid
 import json
 from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
+from sendgrid.helpers.mail import Mail, Email
 
 app = Flask(__name__)
 
@@ -35,7 +35,6 @@ def salvar_pedido(order_nsu, dados):
     except Exception as e:
         print("Erro ao salvar pedido:", e)
 
-
 # ===============================
 # BUSCAR PEDIDO
 # ===============================
@@ -49,7 +48,6 @@ def buscar_pedido(order_nsu):
     except:
         return None
 
-
 # ===============================
 # RECEBE DADOS DO FORMULÁRIO
 # ===============================
@@ -62,20 +60,16 @@ def webhook():
     nome = data.get("nome")
     email = data.get("email")
 
-    # Criar pagamento na InfinitePay
     link, order_nsu = criar_pagamento(nome, email)
 
-    # Salvar pedido em arquivo
     salvar_pedido(order_nsu, {
         "nome": nome,
         "email": email
     })
 
-    # Enviar email com link de pagamento
     enviar_email_pagamento(nome, email, link)
 
     return "OK", 200
-
 
 # ===============================
 # CRIA PAGAMENTO NA INFINITEPAY
@@ -117,9 +111,8 @@ def criar_pagamento(nome, email):
 
     return link, order_nsu
 
-
 # ===============================
-# WEBHOOK DE PAGAMENTO CONFIRMADO
+# WEBHOOK PAGAMENTO
 # ===============================
 @app.route("/pagamento", methods=["POST"])
 def pagamento():
@@ -146,44 +139,44 @@ def pagamento():
 
     return {"success": True}, 200
 
-
 # ===============================
-# EMAIL COM LINK DE PAGAMENTO
+# EMAIL PAGAMENTO (ANTI-SPAM)
 # ===============================
 def enviar_email_pagamento(nome, email, link):
 
     try:
         message = Mail(
-            from_email='lucasfeijorodrigues@gmail.com',
+            from_email=Email("lucasfeijorodrigues@gmail.com", "Lucas"),
             to_emails=email,
-            subject='Link para finalizar sua solicitação',
+            subject='Sua solicitação',
             plain_text_content=f"""
 Olá {nome},
 
-Recebemos sua solicitação.
+Vi aqui que você preencheu o formulário.
 
-Para continuar, acesse o link abaixo e finalize:
-
+Para continuar, é só acessar este link:
 {link}
 
-Se tiver qualquer dúvida, pode responder este email.
+Se precisar de ajuda, pode me responder por aqui.
 
-Obrigado!
+Lucas
 """,
             html_content=f"""
 <p>Olá {nome},</p>
 
-<p>Recebemos sua solicitação.</p>
+<p>Vi aqui que você preencheu o formulário.</p>
 
-<p>Para continuar, acesse o link abaixo:</p>
+<p>Para continuar, acesse este link:</p>
 
 <p>{link}</p>
 
-<p>Se tiver qualquer dúvida, pode responder este email.</p>
+<p>Se precisar de ajuda, pode responder este email.</p>
 
-<p>Obrigado!</p>
+<p>Lucas</p>
 """
         )
+
+        message.reply_to = "lucasfeijorodrigues@gmail.com"
 
         sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
         response = sg.send(message)
@@ -193,41 +186,46 @@ Obrigado!
     except Exception as e:
         print("Erro ao enviar email pagamento:", str(e))
 
-
 # ===============================
-# EMAIL COM PDF (APÓS PAGAMENTO)
+# EMAIL PDF (ANTI-SPAM)
 # ===============================
 def enviar_email_pdf(nome, email):
 
     try:
         message = Mail(
-            from_email='lucasfeijorodrigues@gmail.com',
+            from_email=Email("lucasfeijorodrigues@gmail.com", "Lucas"),
             to_emails=email,
-            subject='Seu material solicitado',
+            subject='Seu material',
             plain_text_content=f"""
 Olá {nome},
 
 Pagamento confirmado.
 
-Aqui está seu material:
+Segue o material que você solicitou:
 https://lncimg.lance.com.br/cdn-cgi/image/width=950,quality=75,fit=pad,format=webp/uploads/2024/11/AGIF24082921530730-scaled-aspect-ratio-512-320.jpg
 
-Qualquer dúvida, estou à disposição.
+Qualquer dúvida, pode me responder aqui.
+
+Lucas
 """,
             html_content=f"""
 <p>Olá {nome},</p>
 
 <p>Pagamento confirmado.</p>
 
-<p>Aqui está seu material:</p>
+<p>Segue o material que você solicitou:</p>
 
 <p>
 https://lncimg.lance.com.br/cdn-cgi/image/width=950,quality=75,fit=pad,format=webp/uploads/2024/11/AGIF24082921530730-scaled-aspect-ratio-512-320.jpg
 </p>
 
-<p>Qualquer dúvida, estou à disposição.</p>
+<p>Qualquer dúvida, pode me responder aqui.</p>
+
+<p>Lucas</p>
 """
         )
+
+        message.reply_to = "lucasfeijorodrigues@gmail.com"
 
         sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
         response = sg.send(message)
@@ -236,7 +234,6 @@ https://lncimg.lance.com.br/cdn-cgi/image/width=950,quality=75,fit=pad,format=we
 
     except Exception as e:
         print("Erro ao enviar PDF:", str(e))
-
 
 # ===============================
 # INICIAR SERVIDOR
