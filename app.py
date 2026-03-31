@@ -138,35 +138,39 @@ def pagamento():
 # ===============================
 def enviar_email_pagamento(nome, email, link):
 
+    print("=== INICIANDO ENVIO EMAIL PAGAMENTO ===")
+
     try:
         msg = MIMEText(f"""
 Olá {nome},
 
-Vi aqui que você preencheu o formulário.
-
 Para continuar:
 {link}
-
-Se precisar, pode me responder aqui.
-
-Lucas
 """)
 
-        msg["Subject"] = "Sua solicitação"
+        msg["Subject"] = "Teste envio"
         msg["From"] = EMAIL_REMETENTE
         msg["To"] = email
 
+        print("Conectando ao Gmail...")
+
         servidor = smtplib.SMTP("smtp.gmail.com", 587)
+        servidor.set_debuglevel(1)  # 🔥 MOSTRA TUDO
         servidor.starttls()
+
+        print("Fazendo login...")
         servidor.login(EMAIL_REMETENTE, SENHA_EMAIL)
 
+        print("Enviando email...")
         servidor.send_message(msg)
+
+        print("Fechando conexão...")
         servidor.quit()
 
-        print("Email pagamento enviado")
+        print("✅ EMAIL ENVIADO COM SUCESSO")
 
     except Exception as e:
-        print("Erro email pagamento:", e)
+        print("❌ ERRO REAL:", str(e))
 
 # ===============================
 # ENVIO EMAIL (PDF)
