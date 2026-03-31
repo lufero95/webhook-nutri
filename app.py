@@ -156,12 +156,33 @@ def enviar_email_pagamento(nome, email, link):
         message = Mail(
             from_email='lucasfeijorodrigues@gmail.com',
             to_emails=email,
-            subject='Seu link de pagamento',
+            subject='Link para finalizar sua solicitação',
+            plain_text_content=f"""
+Olá {nome},
+
+Recebemos sua solicitação.
+
+Para continuar, acesse o link abaixo e finalize:
+
+{link}
+
+Se tiver qualquer dúvida, pode responder este email.
+
+Obrigado!
+""",
             html_content=f"""
-            <p>Olá {nome},</p>
-            <p>Chama, pai🔥 - Clique abaixo para pagar:</p>
-            <a href="{link}">PAGAR AGORA</a>
-            """
+<p>Olá {nome},</p>
+
+<p>Recebemos sua solicitação.</p>
+
+<p>Para continuar, acesse o link abaixo:</p>
+
+<p>{link}</p>
+
+<p>Se tiver qualquer dúvida, pode responder este email.</p>
+
+<p>Obrigado!</p>
+"""
         )
 
         sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
@@ -182,14 +203,30 @@ def enviar_email_pdf(nome, email):
         message = Mail(
             from_email='lucasfeijorodrigues@gmail.com',
             to_emails=email,
-            subject='Seu material',
+            subject='Seu material solicitado',
+            plain_text_content=f"""
+Olá {nome},
+
+Pagamento confirmado.
+
+Aqui está seu material:
+https://lncimg.lance.com.br/cdn-cgi/image/width=950,quality=75,fit=pad,format=webp/uploads/2024/11/AGIF24082921530730-scaled-aspect-ratio-512-320.jpg
+
+Qualquer dúvida, estou à disposição.
+""",
             html_content=f"""
-            <p>Olá {nome},</p>
-            <p>Pagamento confirmado! Aqui está seu material:</p>
-            <a href="https://lncimg.lance.com.br/cdn-cgi/image/width=950,quality=75,fit=pad,format=webp/uploads/2024/11/AGIF24082921530730-scaled-aspect-ratio-512-320.jpg">
-            BAIXAR PDF
-            </a>
-            """
+<p>Olá {nome},</p>
+
+<p>Pagamento confirmado.</p>
+
+<p>Aqui está seu material:</p>
+
+<p>
+https://lncimg.lance.com.br/cdn-cgi/image/width=950,quality=75,fit=pad,format=webp/uploads/2024/11/AGIF24082921530730-scaled-aspect-ratio-512-320.jpg
+</p>
+
+<p>Qualquer dúvida, estou à disposição.</p>
+"""
         )
 
         sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
