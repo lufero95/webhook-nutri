@@ -3,12 +3,15 @@ import os
 import requests
 import uuid
 import json
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail, Email
+import smtplib
+from email.mime.text import MIMEText
 
 app = Flask(__name__)
 
 ARQUIVO_PEDIDOS = "pedidos.json"
+
+EMAIL_REMETENTE = "lucasfeijorodrigues@gmail.com"
+SENHA_EMAIL = "egnx temo tczr sbxg"
 
 @app.route("/")
 def home():
@@ -49,7 +52,7 @@ def buscar_pedido(order_nsu):
         return None
 
 # ===============================
-# RECEBE DADOS DO FORMULÁRIO
+# RECEBE FORMULÁRIO
 # ===============================
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -72,7 +75,7 @@ def webhook():
     return "OK", 200
 
 # ===============================
-# CRIA PAGAMENTO NA INFINITEPAY
+# CRIA PAGAMENTO
 # ===============================
 def criar_pagamento(nome, email):
 
@@ -102,14 +105,12 @@ def criar_pagamento(nome, email):
     try:
         data = response.json()
     except:
-        print("Erro ao converter resposta:", response.text)
+        print("Erro InfinitePay:", response.text)
         return None, None
 
     print("Resposta InfinitePay:", data)
 
-    link = data.get("url")
-
-    return link, order_nsu
+    return data.get("url"), order_nsu
 
 # ===============================
 # WEBHOOK PAGAMENTO
@@ -119,124 +120,91 @@ def pagamento():
 
     data = request.get_json()
 
-    print("Webhook pagamento recebido:", data)
+    print("Pagamento recebido:", data)
 
     order_nsu = data.get("order_nsu")
 
     pedido = buscar_pedido(order_nsu)
 
     if pedido:
-
-        nome = pedido["nome"]
-        email = pedido["email"]
-
-        print("Pagamento confirmado para:", email)
-
-        enviar_email_pdf(nome, email)
-
+        enviar_email_pdf(pedido["nome"], pedido["email"])
     else:
         print("Pedido não encontrado!")
 
     return {"success": True}, 200
 
 # ===============================
-# EMAIL PAGAMENTO (ANTI-SPAM)
+# ENVIO EMAIL (PAGAMENTO)
 # ===============================
 def enviar_email_pagamento(nome, email, link):
 
     try:
-        message = Mail(
-            from_email=Email("lucasfeijorodrigues@gmail.com", "Lucas"),
-            to_emails=email,
-            subject='Sua solicitação',
-            plain_text_content=f"""
+        msg = MIMEText(f"""
 Olá {nome},
 
 Vi aqui que você preencheu o formulário.
 
-Para continuar, é só acessar este link:
+Para continuar:
 {link}
 
-Se precisar de ajuda, pode me responder por aqui.
+Se precisar, pode me responder aqui.
 
 Lucas
-""",
-            html_content=f"""
-<p>Olá {nome},</p>
+""")
 
-<p>Vi aqui que você preencheu o formulário.</p>
+        msg["Subject"] = "Sua solicitação"
+        msg["From"] = EMAIL_REMETENTE
+        msg["To"] = email
 
-<p>Para continuar, acesse este link:</p>
+        servidor = smtplib.SMTP("smtp.gmail.com", 587)
+        servidor.starttls()
+        servidor.login(EMAIL_REMETENTE, SENHA_EMAIL)
 
-<p>{link}</p>
+        servidor.send_message(msg)
+        servidor.quit()
 
-<p>Se precisar de ajuda, pode responder este email.</p>
-
-<p>Lucas</p>
-"""
-        )
-
-        message.reply_to = "lucasfeijorodrigues@gmail.com"
-
-        sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
-        response = sg.send(message)
-
-        print("Email pagamento enviado:", response.status_code)
+        print("Email pagamento enviado")
 
     except Exception as e:
-        print("Erro ao enviar email pagamento:", str(e))
+        print("Erro email pagamento:", e)
 
 # ===============================
-# EMAIL PDF (ANTI-SPAM)
+# ENVIO EMAIL (PDF)
 # ===============================
 def enviar_email_pdf(nome, email):
 
     try:
-        message = Mail(
-            from_email=Email("lucasfeijorodrigues@gmail.com", "Lucas"),
-            to_emails=email,
-            subject='Seu material',
-            plain_text_content=f"""
+        msg = MIMEText(f"""
 Olá {nome},
 
 Pagamento confirmado.
 
-Segue o material que você solicitou:
+Segue o material:
 https://lncimg.lance.com.br/cdn-cgi/image/width=950,quality=75,fit=pad,format=webp/uploads/2024/11/AGIF24082921530730-scaled-aspect-ratio-512-320.jpg
 
-Qualquer dúvida, pode me responder aqui.
+Qualquer dúvida, pode responder aqui.
 
 Lucas
-""",
-            html_content=f"""
-<p>Olá {nome},</p>
+""")
 
-<p>Pagamento confirmado.</p>
+        msg["Subject"] = "Seu material"
+        msg["From"] = EMAIL_REMETENTE
+        msg["To"] = email
 
-<p>Segue o material que você solicitou:</p>
+        servidor = smtplib.SMTP("smtp.gmail.com", 587)
+        servidor.starttls()
+        servidor.login(EMAIL_REMETENTE, SENHA_EMAIL)
 
-<p>
-https://lncimg.lance.com.br/cdn-cgi/image/width=950,quality=75,fit=pad,format=webp/uploads/2024/11/AGIF24082921530730-scaled-aspect-ratio-512-320.jpg
-</p>
+        servidor.send_message(msg)
+        servidor.quit()
 
-<p>Qualquer dúvida, pode me responder aqui.</p>
-
-<p>Lucas</p>
-"""
-        )
-
-        message.reply_to = "lucasfeijorodrigues@gmail.com"
-
-        sg = SendGridAPIClient(os.environ.get('SENDGRID_API_KEY'))
-        response = sg.send(message)
-
-        print("Email PDF enviado:", response.status_code)
+        print("Email PDF enviado")
 
     except Exception as e:
-        print("Erro ao enviar PDF:", str(e))
+        print("Erro email PDF:", e)
 
 # ===============================
-# INICIAR SERVIDOR
+# START
 # ===============================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
