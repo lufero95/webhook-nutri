@@ -97,7 +97,7 @@ def criar_pagamento(nome, email):
         "items": [
             {
                 "quantity": 1,
-                "price": 0010,
+                "price": 100,
                 "description": "Produto 7D Desincha"
             }
         ]
