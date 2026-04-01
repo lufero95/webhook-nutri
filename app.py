@@ -5,17 +5,17 @@ import uuid
 import json
 import smtplib
 from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 
 app = Flask(__name__)
 
 ARQUIVO_PEDIDOS = "pedidos.json"
 
+EMAIL_REMETENTE = "lucasfeijorodrigues@gmail.com"
+SENHA_EMAIL = "egnx temo tczr sbxg"
 
 @app.route("/")
 def home():
     return "Servidor funcionando!"
-
 
 # ===============================
 # SALVAR PEDIDO
@@ -33,9 +33,10 @@ def salvar_pedido(order_nsu, dados):
         with open(ARQUIVO_PEDIDOS, "w") as f:
             json.dump(pedidos, f)
 
-    except Exception as e:
-        print("Erro ao salvar pedido:", e)
+        print("✅ Pedido salvo no arquivo!")
 
+    except Exception as e:
+        print("❌ Erro ao salvar pedido:", e)
 
 # ===============================
 # BUSCAR PEDIDO
@@ -47,72 +48,92 @@ def buscar_pedido(order_nsu):
 
         return pedidos.get(order_nsu)
 
-    except:
+    except Exception as e:
+        print("❌ Erro ao buscar pedido:", e)
         return None
 
-
 # ===============================
-# RECEBE FORMULÁRIO
+# WEBHOOK FORMULÁRIO
 # ===============================
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    data = request.get_json()
+    try:
+        data = request.get_json()
 
-    print("Dados recebidos:", data)
+        print("\n=== 🚀 WEBHOOK RECEBIDO ===")
+        print("Dados:", data)
 
-    nome = data.get("nome")
-    email = data.get("email")
+        nome = data.get("nome")
+        email = data.get("email")
 
-    link, order_nsu = criar_pagamento(nome, email)
+        print("Nome:", nome)
+        print("Email:", email)
 
-    salvar_pedido(order_nsu, {
-        "nome": nome,
-        "email": email
-    })
+        link, order_nsu = criar_pagamento(nome, email)
 
-    enviar_email_pagamento(nome, email, link)
+        print("Link gerado:", link)
+        print("Order NSU:", order_nsu)
 
-    return "OK", 200
+        salvar_pedido(order_nsu, {
+            "nome": nome,
+            "email": email
+        })
 
+        print("📧 Chamando envio de email...")
+
+        enviar_email_pagamento(nome, email, link)
+
+        print("✅ Fim do webhook\n")
+
+        return "OK", 200
+
+    except Exception as e:
+        print("❌ ERRO NO WEBHOOK:", e)
+        return "Erro", 500
 
 # ===============================
-# CRIAR PAGAMENTO
+# CRIA PAGAMENTO
 # ===============================
 def criar_pagamento(nome, email):
 
-    order_nsu = str(uuid.uuid4())
-
-    url = "https://api.infinitepay.io/invoices/public/checkout/links"
-
-    payload = {
-        "handle": "feijonut",
-        "webhook_url": "https://webhook-nutri-y5bp.onrender.com/pagamento",
-        "order_nsu": order_nsu,
-        "customer": {
-            "name": nome,
-            "email": email
-        },
-        "items": [
-            {
-                "quantity": 1,
-                "price": 100,
-                "description": "Produto 7D Desincha"
-            }
-        ]
-    }
-
-    response = requests.post(url, json=payload)
-
     try:
+        order_nsu = str(uuid.uuid4())
+
+        url = "https://api.infinitepay.io/invoices/public/checkout/links"
+
+        payload = {
+            "handle": "feijonut",
+            "webhook_url": "https://webhook-nutri-y5bp.onrender.com/pagamento",
+            "order_nsu": order_nsu,
+            "customer": {
+                "name": nome,
+                "email": email
+            },
+            "items": [
+                {
+                    "quantity": 1,
+                    "price": 100,
+                    "description": "Produto 7D Desincha"
+                }
+            ]
+        }
+
+        print("🔗 Criando pagamento na InfinitePay...")
+
+        response = requests.post(url, json=payload)
+
+        print("Status API:", response.status_code)
+        print("Resposta API:", response.text)
+
         data = response.json()
-    except:
-        print("Erro ao converter resposta:", response.text)
+
+        link = data.get("url")
+
+        return link, order_nsu
+
+    except Exception as e:
+        print("❌ Erro ao criar pagamento:", e)
         return None, None
-
-    link = data.get("url")
-
-    return link, order_nsu
-
 
 # ===============================
 # WEBHOOK PAGAMENTO
@@ -120,129 +141,103 @@ def criar_pagamento(nome, email):
 @app.route("/pagamento", methods=["POST"])
 def pagamento():
 
-    data = request.get_json()
+    try:
+        data = request.get_json()
 
-    print("Webhook pagamento recebido:", data)
+        print("\n💰 Pagamento recebido:", data)
 
-    order_nsu = data.get("order_nsu")
+        order_nsu = data.get("order_nsu")
 
-    pedido = buscar_pedido(order_nsu)
+        pedido = buscar_pedido(order_nsu)
 
-    if pedido:
-        nome = pedido["nome"]
-        email = pedido["email"]
+        if pedido:
+            print("✅ Pedido encontrado:", pedido)
 
-        enviar_email_pdf(nome, email)
+            enviar_email_pdf(pedido["nome"], pedido["email"])
+        else:
+            print("❌ Pedido não encontrado!")
 
-    else:
-        print("Pedido não encontrado!")
+        return {"success": True}, 200
 
-    return {"success": True}, 200
-
-
-# ===============================
-# FUNÇÃO ENVIO EMAIL (GMAIL)
-# ===============================
-def enviar_email(destino, assunto, html):
-
-    remetente = "lucasfeijorodrigues@gmail.com"
-    senha = os.environ.get("egnx temo tczr sbxg")
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = assunto
-    msg["From"] = remetente
-    msg["To"] = destino
-
-    parte_html = MIMEText(html, "html")
-    msg.attach(parte_html)
-
-    with smtplib.SMTP("smtp.gmail.com", 587) as server:
-        server.starttls()
-        server.login(remetente, senha)
-        server.sendmail(remetente, destino, msg.as_string())
-
+    except Exception as e:
+        print("❌ ERRO NO PAGAMENTO:", e)
+        return {"success": False}, 500
 
 # ===============================
-# EMAIL PAGAMENTO (COM BOTÃO)
+# EMAIL PAGAMENTO
 # ===============================
 def enviar_email_pagamento(nome, email, link):
 
-    html = f"""
-    <html>
-    <body style="font-family: Arial;">
+    print("\n=== 📧 INICIANDO ENVIO EMAIL PAGAMENTO ===")
 
-        <p>Olá {nome},</p>
+    try:
+        msg = MIMEText(f"""
+Olá {nome},
 
-        <p>Vi sua solicitação por aqui.</p>
+Para continuar:
+{link}
 
-        <p>Para continuar, clique no botão abaixo:</p>
+Se precisar, pode me responder aqui.
 
-        <p style="text-align: center;">
-            <a href="{link}" 
-               style="
-               background-color:#28a745;
-               color:white;
-               padding:12px 20px;
-               text-decoration:none;
-               border-radius:5px;
-               display:inline-block;
-               font-weight:bold;">
-               Continuar
-            </a>
-        </p>
+Lucas
+""")
 
-        <p>Se não foi você, pode ignorar este email.</p>
+        msg["Subject"] = "Sua solicitação"
+        msg["From"] = EMAIL_REMETENTE
+        msg["To"] = email
 
-        <p>Abs,<br>Lucas</p>
+        print("🔌 Conectando ao Gmail...")
 
-    </body>
-    </html>
-    """
+        servidor = smtplib.SMTP("smtp.gmail.com", 587)
+        servidor.set_debuglevel(1)
 
-    enviar_email(email, "Sua solicitação", html)
+        servidor.starttls()
 
+        print("🔐 Fazendo login...")
+        servidor.login(EMAIL_REMETENTE, SENHA_EMAIL)
+
+        print("📤 Enviando email...")
+        servidor.send_message(msg)
+
+        servidor.quit()
+
+        print("✅ EMAIL ENVIADO COM SUCESSO\n")
+
+    except Exception as e:
+        print("❌ ERRO AO ENVIAR EMAIL:", e)
 
 # ===============================
-# EMAIL PDF (COM BOTÃO)
+# EMAIL PDF
 # ===============================
 def enviar_email_pdf(nome, email):
 
-    link_material = "https://lncimg.lance.com.br/cdn-cgi/image/width=950,quality=75,fit=pad,format=webp/uploads/2024/11/AGIF24082921530730-scaled-aspect-ratio-512-320.jpg"
+    print("\n=== 📧 INICIANDO ENVIO PDF ===")
 
-    html = f"""
-    <html>
-    <body style="font-family: Arial;">
+    try:
+        msg = MIMEText(f"""
+Olá {nome},
 
-        <p>Olá {nome},</p>
+Pagamento confirmado.
 
-        <p>Pagamento confirmado 👍</p>
+Segue o material:
+https://lncimg.lance.com.br/cdn-cgi/image/width=950,quality=75,fit=pad,format=webp/uploads/2024/11/AGIF24082921530730-scaled-aspect-ratio-512-320.jpg
+""")
 
-        <p>Clique abaixo para acessar seu material:</p>
+        msg["Subject"] = "Seu material"
+        msg["From"] = EMAIL_REMETENTE
+        msg["To"] = email
 
-        <p style="text-align: center;">
-            <a href="{link_material}" 
-               style="
-               background-color:#007bff;
-               color:white;
-               padding:12px 20px;
-               text-decoration:none;
-               border-radius:5px;
-               display:inline-block;
-               font-weight:bold;">
-               Acessar material
-            </a>
-        </p>
+        servidor = smtplib.SMTP("smtp.gmail.com", 587)
+        servidor.starttls()
+        servidor.login(EMAIL_REMETENTE, SENHA_EMAIL)
 
-        <p>Qualquer dúvida, pode me responder aqui.</p>
+        servidor.send_message(msg)
+        servidor.quit()
 
-        <p>Lucas</p>
+        print("✅ EMAIL PDF ENVIADO\n")
 
-    </body>
-    </html>
-    """
-
-    enviar_email(email, "Seu material", html)
-
+    except Exception as e:
+        print("❌ ERRO AO ENVIAR PDF:", e)
 
 # ===============================
 # START
