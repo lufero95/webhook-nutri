@@ -11,7 +11,7 @@ app = Flask(__name__)
 ARQUIVO_PEDIDOS = "pedidos.json"
 
 EMAIL_REMETENTE = "lucasfeijorodrigues@gmail.com"
-SENHA_EMAIL = "SUA_SENHA_DE_APP_AQUI"
+SENHA_EMAIL = "egnx temo tczr sbxg"
 
 @app.route("/")
 def home():
